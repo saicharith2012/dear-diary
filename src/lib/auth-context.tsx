@@ -11,10 +11,11 @@ import {
 } from "react";
 import {
   changePasscode as changePasscodeVault,
-  isCryptoSupported,
+  getCryptoSupportInfo,
   registerVault,
   resetVault,
   unlockWithPasscode,
+  type CryptoSupportInfo,
 } from "@/lib/vault";
 import { getProfile } from "@/lib/storage";
 import type { AuthStatus, VaultProfile } from "@/lib/types";
@@ -24,6 +25,7 @@ interface AuthContextValue {
   profile: VaultProfile | null;
   masterKey: CryptoKey | null;
   error: string | null;
+  cryptoSupport: CryptoSupportInfo | null;
   register: (displayName: string, passcode: string) => Promise<void>;
   unlock: (passcode: string) => Promise<void>;
   changePasscode: (
@@ -42,11 +44,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<VaultProfile | null>(null);
   const [masterKey, setMasterKey] = useState<CryptoKey | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cryptoSupport, setCryptoSupport] = useState<CryptoSupportInfo | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!isCryptoSupported()) {
+      const support = getCryptoSupportInfo();
+      if (!cancelled) setCryptoSupport(support);
+      if (!support.supported) {
         if (!cancelled) setStatus("unsupported");
         return;
       }
@@ -132,6 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       masterKey,
       error,
+      cryptoSupport,
       register,
       unlock,
       changePasscode,
@@ -144,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       masterKey,
       error,
+      cryptoSupport,
       register,
       unlock,
       changePasscode,

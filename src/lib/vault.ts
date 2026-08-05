@@ -12,12 +12,29 @@ import {
 import { getProfile, saveProfile, wipeAllData } from "./storage";
 import type { VaultProfile } from "./types";
 
+export type CryptoSupportInfo = {
+  supported: boolean;
+  /** True when the page is HTTP on a non-localhost host (LAN IP, etc.). */
+  insecureContext: boolean;
+  localhostUrl: string | null;
+};
+
+export function getCryptoSupportInfo(): CryptoSupportInfo {
+  const hasWindow = typeof window !== "undefined";
+  const hasCrypto = typeof crypto !== "undefined";
+  const hasSubtle = hasCrypto && !!crypto.subtle;
+  const supported = hasWindow && hasCrypto && hasSubtle;
+  const insecureContext = hasWindow && !window.isSecureContext;
+  const localhostUrl =
+    hasWindow && insecureContext
+      ? `${window.location.protocol}//localhost${window.location.port ? `:${window.location.port}` : ""}${window.location.pathname}${window.location.search}`
+      : null;
+
+  return { supported, insecureContext, localhostUrl };
+}
+
 export function isCryptoSupported(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof crypto !== "undefined" &&
-    !!crypto.subtle
-  );
+  return getCryptoSupportInfo().supported;
 }
 
 export function validatePasscode(passcode: string): string | null {

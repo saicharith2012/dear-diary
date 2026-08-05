@@ -5,8 +5,16 @@ import { useAuth } from "@/lib/auth-context";
 import { MIN_PASSCODE_LENGTH } from "@/lib/crypto";
 
 export function AuthScreen() {
-  const { status, profile, error, register, unlock, reset, clearError } =
-    useAuth();
+  const {
+    status,
+    profile,
+    error,
+    cryptoSupport,
+    register,
+    unlock,
+    reset,
+    clearError,
+  } = useAuth();
   const [name, setName] = useState("");
   const [passcode, setPasscode] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -74,14 +82,45 @@ export function AuthScreen() {
   }
 
   if (status === "unsupported") {
+    const insecure = cryptoSupport?.insecureContext;
+    const localhostUrl = cryptoSupport?.localhostUrl;
     return (
       <div className="auth-shell">
         <BrandMark />
-        <p className="mt-8 max-w-md text-center text-lg text-ink-muted">
-          This browser does not support the Web Crypto API needed to lock your
-          diary. Try a current version of Chrome, Safari, Edge, or Firefox over
-          HTTPS (or localhost).
-        </p>
+        {insecure ? (
+          <div className="mt-8 max-w-md text-center text-lg text-ink-muted">
+            <p>
+              This page is open over an insecure connection (
+              <span className="text-ink">{typeof window !== "undefined"
+                ? window.location.host
+                : "this host"}
+              </span>
+              ), so the browser hides the Web Crypto API used to lock your
+              diary.
+            </p>
+            <p className="mt-4">
+              Open it via{" "}
+              <span className="font-medium text-ink">localhost</span> or HTTPS
+              instead
+              {localhostUrl ? (
+                <>
+                  :{" "}
+                  <a className="text-accent underline" href={localhostUrl}>
+                    {localhostUrl}
+                  </a>
+                </>
+              ) : (
+                "."
+              )}
+            </p>
+          </div>
+        ) : (
+          <p className="mt-8 max-w-md text-center text-lg text-ink-muted">
+            This browser does not support the Web Crypto API needed to lock your
+            diary. Try a current version of Chrome, Safari, Edge, or Firefox over
+            HTTPS (or localhost).
+          </p>
+        )}
       </div>
     );
   }
