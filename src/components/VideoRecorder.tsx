@@ -119,7 +119,7 @@ export function VideoRecorder({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-ink-muted">
-        Capture a short video diary entry. Encrypted chunk-by-chunk on this device.
+        Capture a short video diary entry.
       </p>
 
       {!previewUrl && (
@@ -180,7 +180,7 @@ export function VideoRecorder({
               disabled={disabled}
               onClick={() => onCapture(blob, elapsed)}
             >
-              Encrypt & save
+              Save
             </button>
             <button
               type="button"

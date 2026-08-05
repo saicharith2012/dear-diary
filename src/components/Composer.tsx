@@ -1,80 +1,62 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { createMediaEntry, createTextEntry } from "@/lib/journal";
-import type { EntryType, JournalEntryMeta } from "@/lib/types";
+import type { EntryType } from "@/lib/types";
 import { AudioRecorder } from "./AudioRecorder";
 import { VideoRecorder } from "./VideoRecorder";
 
 type Tab = EntryType;
 
+export type TextSubmitPayload = {
+  title: string;
+  body: string;
+};
+
+export type MediaSubmitPayload = {
+  type: "audio" | "video";
+  title: string;
+  blob: Blob;
+  durationMs?: number;
+};
+
 export function Composer({
-  masterKey,
   onClose,
-  onCreated,
+  onSubmitText,
+  onSubmitMedia,
 }: {
-  masterKey: CryptoKey;
   onClose: () => void;
-  onCreated: (entry: JournalEntryMeta) => void;
+  onSubmitText: (payload: TextSubmitPayload) => void;
+  onSubmitMedia: (payload: MediaSubmitPayload) => void;
 }) {
   const titleId = useId();
   const [tab, setTab] = useState<Tab>("text");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape" && !busy) onClose();
+      if (e.key === "Escape") onClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [busy, onClose]);
+  }, [onClose]);
 
-  async function saveText(e: React.FormEvent) {
+  function saveText(e: React.FormEvent) {
     e.preventDefault();
     if (!body.trim()) {
       setError("Write something first.");
       return;
     }
-    setBusy(true);
-    setError(null);
-    try {
-      const entry = await createTextEntry(masterKey, title, body);
-      onCreated(entry);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save");
-    } finally {
-      setBusy(false);
-    }
+    onSubmitText({ title, body });
   }
 
-  async function saveMedia(
+  function saveMedia(
     type: "audio" | "video",
     blob: Blob,
     durationMs?: number,
   ) {
-    setBusy(true);
-    setError(null);
-    setProgress(0);
-    try {
-      const entry = await createMediaEntry(masterKey, {
-        type,
-        title,
-        blob,
-        durationMs,
-        onProgress: (done, total) =>
-          setProgress(Math.round((done / Math.max(total, 1)) * 100)),
-      });
-      onCreated(entry);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save");
-    } finally {
-      setBusy(false);
-      setProgress(null);
-    }
+    onSubmitMedia({ type, title, blob, durationMs });
   }
 
   return (
@@ -92,14 +74,13 @@ export function Composer({
               New entry
             </h2>
             <p className="mt-1 text-sm text-ink-muted">
-              Encrypted on this device before it ever leaves memory.
+              Private to this device.
             </p>
           </div>
           <button
             type="button"
             className="btn-icon"
             onClick={onClose}
-            disabled={busy}
             aria-label="Close"
           >
             ✕
@@ -115,12 +96,9 @@ export function Composer({
               aria-selected={tab === t}
               className={`tab-btn ${tab === t ? "tab-btn-active" : ""}`}
               onClick={() => {
-                if (!busy) {
-                  setTab(t);
-                  setError(null);
-                }
+                setTab(t);
+                setError(null);
               }}
-              disabled={busy}
             >
               {t}
             </button>
@@ -135,7 +113,6 @@ export function Composer({
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Optional title"
             maxLength={120}
-            disabled={busy}
           />
         </label>
 
@@ -149,39 +126,27 @@ export function Composer({
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
                   placeholder="Dear diary…"
-                  disabled={busy}
                   required
                 />
               </label>
-              <button type="submit" className="btn-primary" disabled={busy}>
-                {busy ? "Encrypting…" : "Save encrypted note"}
+              <button type="submit" className="btn-primary">
+                Save
               </button>
             </form>
           )}
 
           {tab === "audio" && (
             <AudioRecorder
-              disabled={busy}
               onCapture={(blob, durationMs) => saveMedia("audio", blob, durationMs)}
             />
           )}
 
           {tab === "video" && (
             <VideoRecorder
-              disabled={busy}
               onCapture={(blob, durationMs) => saveMedia("video", blob, durationMs)}
             />
           )}
         </div>
-
-        {progress !== null && (
-          <div className="mt-4">
-            <p className="text-sm text-ink-muted">Encrypting chunks… {progress}%</p>
-            <div className="progress-track mt-2">
-              <div className="progress-fill" style={{ width: `${progress}%` }} />
-            </div>
-          </div>
-        )}
 
         {error && (
           <p role="alert" className="mt-4 text-sm text-danger">

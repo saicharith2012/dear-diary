@@ -99,7 +99,7 @@ export function AudioRecorder({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-ink-muted">
-        Record a voice note. It will be split into encrypted chunks on save.
+        Record a voice note.
       </p>
 
       <div className="flex items-center gap-4">
@@ -126,7 +126,7 @@ export function AudioRecorder({
               disabled={disabled}
               onClick={() => onCapture(blob, elapsed)}
             >
-              Encrypt & save
+              Save
             </button>
             <button
               type="button"
