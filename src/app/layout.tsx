@@ -18,6 +18,9 @@ export const metadata: Metadata = {
   title: "Dear Diary",
   description:
     "A private text, audio, and video journal locked with a passcode. Everything stays encrypted on your device.",
+  icons: {
+    icon: "/diary_icon.svg",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
