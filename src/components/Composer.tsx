@@ -33,14 +33,15 @@ export function Composer({
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [videoImmersive, setVideoImmersive] = useState(false);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !videoImmersive) onClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, videoImmersive]);
 
   function saveText(e: React.FormEvent) {
     e.preventDefault();
@@ -98,6 +99,7 @@ export function Composer({
               onClick={() => {
                 setTab(t);
                 setError(null);
+                if (t !== "video") setVideoImmersive(false);
               }}
             >
               {t}
@@ -144,6 +146,7 @@ export function Composer({
           {tab === "video" && (
             <VideoRecorder
               onCapture={(blob, durationMs) => saveMedia("video", blob, durationMs)}
+              onImmersiveChange={setVideoImmersive}
             />
           )}
         </div>

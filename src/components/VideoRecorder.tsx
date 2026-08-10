@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import { FullscreenVideo } from "./FullscreenVideo";
 
 function pickMime(candidates: string[]): string | undefined {
   if (typeof MediaRecorder === "undefined") return undefined;
@@ -10,9 +12,11 @@ function pickMime(candidates: string[]): string | undefined {
 export function VideoRecorder({
   disabled,
   onCapture,
+  onImmersiveChange,
 }: {
   disabled?: boolean;
   onCapture: (blob: Blob, durationMs: number) => void;
+  onImmersiveChange?: (immersive: boolean) => void;
 }) {
   const liveRef = useRef<HTMLVideoElement>(null);
   const [recording, setRecording] = useState(false);
@@ -21,6 +25,7 @@ export function VideoRecorder({
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
+  const [immersive, setImmersive] = useState(false);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -37,10 +42,33 @@ export function VideoRecorder({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    onImmersiveChange?.(immersive);
+    return () => onImmersiveChange?.(false);
+  }, [immersive, onImmersiveChange]);
+
+  useEffect(() => {
+    if (!previewing || previewUrl || !liveRef.current || !streamRef.current) {
+      return;
+    }
+    liveRef.current.srcObject = streamRef.current;
+    void liveRef.current.play().catch(() => {});
+  }, [previewing, previewUrl, immersive]);
+
   function stopTracks() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
   }
+
+  const enterImmersive = useCallback(() => {
+    flushSync(() => {
+      setImmersive(true);
+    });
+  }, []);
+
+  const exitImmersive = useCallback(() => {
+    setImmersive(false);
+  }, []);
 
   async function enableCamera() {
     setError(null);
@@ -50,11 +78,13 @@ export function VideoRecorder({
         video: { facingMode: "user" },
       });
       streamRef.current = stream;
-      if (liveRef.current) {
-        liveRef.current.srcObject = stream;
-        await liveRef.current.play();
-      }
       setPreviewing(true);
+      requestAnimationFrame(() => {
+        if (liveRef.current && streamRef.current) {
+          liveRef.current.srcObject = streamRef.current;
+          void liveRef.current.play().catch(() => {});
+        }
+      });
     } catch {
       setError("Camera and microphone permission are required.");
     }
@@ -116,83 +146,133 @@ export function VideoRecorder({
     void enableCamera();
   }
 
+  const actionControls = (
+    <>
+      {previewing && !recording && !blob && (
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={start}
+          disabled={disabled}
+        >
+          Start recording
+        </button>
+      )}
+      {recording && (
+        <button type="button" className="btn-danger" onClick={stop}>
+          Stop · {formatMs(elapsed)}
+        </button>
+      )}
+      {blob && !recording && (
+        <>
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={disabled}
+            onClick={() => onCapture(blob, elapsed)}
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            disabled={disabled}
+            onClick={discard}
+          >
+            Re-record
+          </button>
+        </>
+      )}
+    </>
+  );
+
+  const showLive = !previewUrl;
+
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-ink-muted">
         Capture a short video diary entry.
       </p>
 
-      {!previewUrl && (
-        <div className="video-frame">
-          <video
-            ref={liveRef}
-            className="h-full w-full object-cover"
-            muted
-            playsInline
-          />
-          {!previewing && (
-            <div className="absolute inset-0 flex items-center justify-center bg-ink/40">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={enableCamera}
-                disabled={disabled}
-              >
-                Enable camera
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {previewUrl && (
-        <div className="video-frame">
-          <video
-            src={previewUrl}
-            className="h-full w-full object-cover"
-            controls
-            playsInline
-          />
-        </div>
-      )}
-
-      <div className="flex flex-wrap items-center gap-3">
-        {previewing && !recording && !blob && (
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={start}
-            disabled={disabled}
-          >
-            Start recording
-          </button>
-        )}
-        {recording && (
-          <button type="button" className="btn-danger" onClick={stop}>
-            Stop · {formatMs(elapsed)}
-          </button>
-        )}
-        {blob && !recording && (
+      <FullscreenVideo
+        active={immersive}
+        onExit={exitImmersive}
+        className="video-frame"
+        dock={
           <>
+            {actionControls}
             <button
               type="button"
-              className="btn-primary"
-              disabled={disabled}
-              onClick={() => onCapture(blob, elapsed)}
+              className="btn-secondary"
+              onClick={exitImmersive}
             >
-              Save
-            </button>
-            <button
-              type="button"
-              className="btn-ghost"
-              disabled={disabled}
-              onClick={discard}
-            >
-              Re-record
+              Exit fullscreen
             </button>
           </>
+        }
+      >
+        {showLive ? (
+          <>
+            <video
+              ref={liveRef}
+              className={
+                immersive
+                  ? "video-fs-cover"
+                  : "h-full w-full object-cover"
+              }
+              muted
+              playsInline
+            />
+            {!immersive && !previewing && (
+              <div className="absolute inset-0 flex items-center justify-center bg-ink/40">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={enableCamera}
+                  disabled={disabled}
+                >
+                  Enable camera
+                </button>
+              </div>
+            )}
+            {!immersive && previewing && (
+              <button
+                type="button"
+                className="btn-secondary absolute right-3 top-3 z-10"
+                onClick={enterImmersive}
+              >
+                Fullscreen
+              </button>
+            )}
+          </>
+        ) : (
+          <>
+            <video
+              src={previewUrl}
+              className={
+                immersive
+                  ? "video-fs-contain"
+                  : "h-full w-full object-cover"
+              }
+              controls
+              playsInline
+            />
+            {!immersive && (
+              <button
+                type="button"
+                className="btn-secondary absolute right-3 top-3"
+                onClick={enterImmersive}
+              >
+                Fullscreen
+              </button>
+            )}
+          </>
         )}
-      </div>
+      </FullscreenVideo>
+
+      {!immersive && (
+        <div className="flex flex-wrap items-center gap-3">{actionControls}</div>
+      )}
 
       {error && (
         <p role="alert" className="text-sm text-danger">
