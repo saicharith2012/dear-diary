@@ -11,6 +11,23 @@ A private **text / audio / video** journal built with Next.js. Everything stays 
 - **Streaming decrypt** on replay (pull-based chunk decryption → Blob URL)
 - Text notes, voice notes, and video diary entries
 
+## Repo layout
+
+This is an npm workspaces monorepo. The web app and the (in-progress) React
+Native app share one platform-agnostic domain core.
+
+```
+apps/web/          Next.js app — components, IndexedDB storage, ffmpeg.wasm transcode
+packages/core/     types, crypto, vault, journal, auth state + adapter interfaces
+```
+
+`packages/core` never imports a platform API directly. It declares adapter
+interfaces (`StorageAdapter`, `Base64Adapter`, `PlatformAdapter`) and each app
+injects its implementations once at startup — the web app in
+`apps/web/src/lib/adapters.ts`. That keeps the Next.js build free of custom
+module resolution while letting a native app supply SQLite and the filesystem
+instead of IndexedDB.
+
 ## Run locally
 
 ```bash
@@ -19,6 +36,16 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+Other commands, all from the repo root:
+
+```bash
+npm run build           # production build of the web app
+npm run lint            # eslint over apps/web
+npm run typecheck       # tsc --noEmit in every workspace
+npm run verify:crypto   # prove the shared core is byte-compatible with the
+                        # pre-monorepo crypto (see scripts/verify-crypto-parity.mjs)
+```
 
 ## How encryption works
 

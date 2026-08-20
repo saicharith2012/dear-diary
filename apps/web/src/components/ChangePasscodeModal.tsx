@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAuth } from "@/lib/auth-context";
-import { MIN_PASSCODE_LENGTH } from "@/lib/crypto";
+import { MIN_PASSCODE_LENGTH, useAuth } from "@dear-diary/core";
 
 export function ChangePasscodeModal({ onClose }: { onClose: () => void }) {
   const { changePasscode, clearError, error } = useAuth();

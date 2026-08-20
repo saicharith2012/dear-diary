@@ -16,9 +16,9 @@ import {
   resetVault,
   unlockWithPasscode,
   type CryptoSupportInfo,
-} from "@/lib/vault";
-import { getProfile } from "@/lib/storage";
-import type { AuthStatus, VaultProfile } from "@/lib/types";
+} from "./vault";
+import { getProfile } from "./storage";
+import type { AuthStatus, VaultProfile } from "./types";
 
 interface AuthContextValue {
   status: AuthStatus;

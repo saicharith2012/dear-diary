@@ -1,6 +1,6 @@
 "use client";
 
-import type { JournalEntryMeta } from "@/lib/types";
+import type { JournalEntryMeta } from "@dear-diary/core";
 
 const TYPE_LABEL: Record<JournalEntryMeta["type"], string> = {
   text: "Text",

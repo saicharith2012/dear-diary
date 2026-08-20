@@ -9,33 +9,12 @@ import {
   unwrapMasterKey,
   wrapMasterKey,
 } from "./crypto";
+import { getCryptoSupportInfo, isCryptoSupported } from "./platform";
 import { getProfile, saveProfile, wipeAllData } from "./storage";
 import type { VaultProfile } from "./types";
 
-export type CryptoSupportInfo = {
-  supported: boolean;
-  /** True when the page is HTTP on a non-localhost host (LAN IP, etc.). */
-  insecureContext: boolean;
-  localhostUrl: string | null;
-};
-
-export function getCryptoSupportInfo(): CryptoSupportInfo {
-  const hasWindow = typeof window !== "undefined";
-  const hasCrypto = typeof crypto !== "undefined";
-  const hasSubtle = hasCrypto && !!crypto.subtle;
-  const supported = hasWindow && hasCrypto && hasSubtle;
-  const insecureContext = hasWindow && !window.isSecureContext;
-  const localhostUrl =
-    hasWindow && insecureContext
-      ? `${window.location.protocol}//localhost${window.location.port ? `:${window.location.port}` : ""}${window.location.pathname}${window.location.search}`
-      : null;
-
-  return { supported, insecureContext, localhostUrl };
-}
-
-export function isCryptoSupported(): boolean {
-  return getCryptoSupportInfo().supported;
-}
+export type { CryptoSupportInfo } from "./platform";
+export { getCryptoSupportInfo, isCryptoSupported };
 
 export function validatePasscode(passcode: string): string | null {
   if (passcode.length < MIN_PASSCODE_LENGTH) {
@@ -109,7 +88,7 @@ export async function unlockWithPasscode(
 
 /**
  * Re-wrap the existing master key under a new passcode.
- * Entry ciphertext is unchanged—only the IndexedDB wrap blob is replaced.
+ * Entry ciphertext is unchanged—only the stored wrap blob is replaced.
  */
 export async function changePasscode(
   currentPasscode: string,

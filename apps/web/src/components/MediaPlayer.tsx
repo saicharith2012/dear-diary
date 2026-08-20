@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { openDecryptedMediaStream } from "@/lib/journal";
-import type { JournalEntryMeta } from "@/lib/types";
+import {
+  openDecryptedMediaStream,
+  type JournalEntryMeta,
+} from "@dear-diary/core";
 import { FullscreenVideo } from "./FullscreenVideo";
 
 export function MediaPlayer({

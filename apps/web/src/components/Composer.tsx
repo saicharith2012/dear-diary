@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import type { EntryType } from "@/lib/types";
+import type { EntryType } from "@dear-diary/core";
 import { AudioRecorder } from "./AudioRecorder";
 import { VideoRecorder } from "./VideoRecorder";
 

@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored ffmpeg.wasm build output, copied in by postinstall.
+    "public/ffmpeg/**",
   ]),
 ]);
 

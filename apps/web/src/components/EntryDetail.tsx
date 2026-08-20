@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { readTextEntry, removeEntry } from "@/lib/journal";
-import type { JournalEntryMeta } from "@/lib/types";
+import {
+  readTextEntry,
+  removeEntry,
+  type JournalEntryMeta,
+} from "@dear-diary/core";
 import { MediaPlayer } from "./MediaPlayer";
 
 export function EntryDetail({

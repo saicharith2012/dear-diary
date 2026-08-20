@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/lib/auth-context";
-import { MIN_PASSCODE_LENGTH } from "@/lib/crypto";
+import { MIN_PASSCODE_LENGTH, useAuth } from "@dear-diary/core";
 
 export function AuthScreen() {
   const {

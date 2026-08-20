@@ -1,6 +1,7 @@
 import {
   decryptChunksStream,
   decryptText,
+  encodeUtf8,
   encryptInChunks,
   encryptText,
 } from "./crypto";
@@ -38,7 +39,7 @@ export async function createTextEntry(
     title: title.trim() || "Untitled note",
     createdAt: now,
     updatedAt: now,
-    plainSize: new TextEncoder().encode(body).byteLength,
+    plainSize: encodeUtf8(body).byteLength,
     chunkCount: 1,
     mimeType: "text/plain",
   };
@@ -79,15 +80,13 @@ export async function createMediaEntry(
     id,
     type: opts.type,
     title:
-      opts.title.trim() ||
-      (opts.type === "audio" ? "Voice note" : "Video note"),
+      opts.title.trim() || (opts.type === "audio" ? "Voice note" : "Video note"),
     createdAt: now,
     updatedAt: now,
     plainSize: buffer.byteLength,
     chunkCount: chunks.length,
     mimeType:
-      opts.blob.type ||
-      (opts.type === "audio" ? "audio/webm" : "video/webm"),
+      opts.blob.type || (opts.type === "audio" ? "audio/webm" : "video/webm"),
     durationMs: opts.durationMs,
   };
   await saveEntry(entry);
@@ -121,43 +120,6 @@ export function openDecryptedMediaStream(
       void gen.return?.(undefined);
     },
   });
-}
-
-/**
- * Stream-decrypt chunks, assemble a Blob, attach to a media element.
- * Decryption happens pull-based (chunk at a time) while the blob is built.
- */
-export async function attachStreamingPlayback(
-  mediaEl: HTMLMediaElement,
-  key: CryptoKey,
-  entry: JournalEntryMeta,
-  onProgress?: (done: number, total: number) => void,
-): Promise<() => void> {
-  const mime = entry.mimeType || "video/webm";
-  const parts: BlobPart[] = [];
-  let done = 0;
-
-  const stream = openDecryptedMediaStream(key, entry);
-  const reader = stream.getReader();
-
-  while (true) {
-    const { value, done: finished } = await reader.read();
-    if (finished) break;
-    // Copy into a fresh ArrayBuffer so BlobPart typings accept it
-    parts.push(value.slice().buffer);
-    done += 1;
-    onProgress?.(done, entry.chunkCount);
-  }
-
-  const blob = new Blob(parts, { type: mime });
-  const url = URL.createObjectURL(blob);
-  mediaEl.src = url;
-
-  return () => {
-    URL.revokeObjectURL(url);
-    mediaEl.removeAttribute("src");
-    mediaEl.load();
-  };
 }
 
 export async function removeEntry(entry: JournalEntryMeta): Promise<void> {

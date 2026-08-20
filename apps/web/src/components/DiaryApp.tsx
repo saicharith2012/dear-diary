@@ -1,15 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useAuth } from "@/lib/auth-context";
 import {
   createMediaEntry,
   createTextEntry,
   getAllEntries,
   removeEntry,
-} from "@/lib/journal";
+  useAuth,
+  type JournalEntryMeta,
+} from "@dear-diary/core";
 import { prepareVideoForSave } from "@/lib/transcode";
-import type { JournalEntryMeta } from "@/lib/types";
 import { ChangePasscodeModal } from "./ChangePasscodeModal";
 import {
   Composer,

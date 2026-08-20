@@ -1,22 +1,59 @@
-const textEncoder = new TextEncoder();
-const textDecoder = new TextDecoder();
+import { getBase64Adapter } from "./base64";
+
+/**
+ * Lazy so importing core never touches a global that may not exist yet.
+ * Hermes (RN 0.74+) ships TextEncoder/TextDecoder; older runtimes need a
+ * polyfill installed before the first encrypt/decrypt call.
+ */
+let cachedEncoder: TextEncoder | null = null;
+let cachedDecoder: TextDecoder | null = null;
+
+function encoder(): TextEncoder {
+  if (!cachedEncoder) {
+    if (typeof TextEncoder === "undefined") {
+      throw new Error(
+        "TextEncoder is unavailable. Install a text-encoding polyfill before using the vault.",
+      );
+    }
+    cachedEncoder = new TextEncoder();
+  }
+  return cachedEncoder;
+}
+
+function decoder(): TextDecoder {
+  if (!cachedDecoder) {
+    if (typeof TextDecoder === "undefined") {
+      throw new Error(
+        "TextDecoder is unavailable. Install a text-encoding polyfill before using the vault.",
+      );
+    }
+    cachedDecoder = new TextDecoder();
+  }
+  return cachedDecoder;
+}
+
+export function encodeUtf8(text: string): Uint8Array {
+  return encoder().encode(text);
+}
+
+export function decodeUtf8(bytes: Uint8Array): string {
+  return decoder().decode(bytes);
+}
 
 export const CHUNK_PLAIN_SIZE = 64 * 1024; // 64 KiB plaintext per chunk
 export const GCM_IV_BYTES = 12;
 export const GCM_TAG_BYTES = 16;
 
+/** Stored size of one full chunk: IV + ciphertext + GCM tag. */
+export const CHUNK_STORED_SIZE = CHUNK_PLAIN_SIZE + GCM_IV_BYTES + GCM_TAG_BYTES;
+
 export function toBase64(bytes: ArrayBuffer | Uint8Array): string {
   const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  let binary = "";
-  for (let i = 0; i < view.length; i++) binary += String.fromCharCode(view[i]!);
-  return btoa(binary);
+  return getBase64Adapter().encode(view);
 }
 
 export function fromBase64(b64: string): Uint8Array {
-  const binary = atob(b64);
-  const out = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
-  return out;
+  return getBase64Adapter().decode(b64);
 }
 
 export function bufferSource(bytes: Uint8Array): ArrayBuffer {
@@ -39,8 +76,7 @@ export async function importAesKey(
   raw: ArrayBuffer | Uint8Array,
   extractable = false,
 ): Promise<CryptoKey> {
-  const material =
-    raw instanceof Uint8Array ? bufferSource(raw) : raw;
+  const material = raw instanceof Uint8Array ? bufferSource(raw) : raw;
   return crypto.subtle.importKey(
     "raw",
     material,
@@ -64,7 +100,7 @@ export async function deriveKeyFromPasscode(
 ): Promise<CryptoKey> {
   const baseKey = await crypto.subtle.importKey(
     "raw",
-    textEncoder.encode(passcode),
+    bufferSource(encodeUtf8(passcode)),
     "PBKDF2",
     false,
     ["deriveKey"],
@@ -88,12 +124,10 @@ export async function wrapMasterKey(
   masterKey: CryptoKey,
 ): Promise<{ wrapped: ArrayBuffer; iv: Uint8Array }> {
   const iv = crypto.getRandomValues(new Uint8Array(GCM_IV_BYTES));
-  const wrapped = await crypto.subtle.wrapKey(
-    "raw",
-    masterKey,
-    wrappingKey,
-    { name: "AES-GCM", iv },
-  );
+  const wrapped = await crypto.subtle.wrapKey("raw", masterKey, wrappingKey, {
+    name: "AES-GCM",
+    iv,
+  });
   return { wrapped, iv };
 }
 
@@ -106,8 +140,7 @@ export async function unwrapMasterKey(
     extractable?: boolean;
   },
 ): Promise<CryptoKey> {
-  const data =
-    wrapped instanceof Uint8Array ? bufferSource(wrapped) : wrapped;
+  const data = wrapped instanceof Uint8Array ? bufferSource(wrapped) : wrapped;
   const extractable = options?.extractable ?? false;
   return crypto.subtle.unwrapKey(
     "raw",
@@ -159,7 +192,7 @@ export async function encryptText(
   key: CryptoKey,
   text: string,
 ): Promise<Uint8Array> {
-  return encryptBytes(key, textEncoder.encode(text));
+  return encryptBytes(key, encodeUtf8(text));
 }
 
 export async function decryptText(
@@ -167,7 +200,7 @@ export async function decryptText(
   payload: Uint8Array,
 ): Promise<string> {
   const bytes = await decryptBytes(key, payload);
-  return textDecoder.decode(bytes);
+  return decodeUtf8(bytes);
 }
 
 /**
