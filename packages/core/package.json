@@ -1,0 +1,28 @@
+{
+  "name": "@dear-diary/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Platform-agnostic domain core for Dear Diary: types, crypto, vault lifecycle, journal orchestration, auth state.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": ">=19"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "typescript": "^5"
+  }
+}
