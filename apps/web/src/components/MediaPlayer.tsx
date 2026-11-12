@@ -1,13 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import {
   openDecryptedMediaStream,
   type JournalEntryMeta,
 } from "@dear-diary/core";
+import { downloadUrl, extensionForMime, safeFileName } from "@/lib/format";
 import { FullscreenVideo } from "./FullscreenVideo";
+import { DownloadIcon } from "./Icons";
 
+/**
+ * Decrypts one entry's media and plays it. Mount with `key={entry.id}`: the
+ * component assumes a fresh instance per entry and never resets its own state.
+ */
 export function MediaPlayer({
   entry,
   masterKey,
@@ -15,15 +21,16 @@ export function MediaPlayer({
   entry: JournalEntryMeta;
   masterKey: CryptoKey;
 }) {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const objectUrlRef = useRef<string | null>(null);
+  // Decrypt once per mount: starring or renaming the entry hands us a new
+  // `entry` object, and that must not restart the decrypt.
+  const [source] = useState(entry);
   const [progress, setProgress] = useState(0);
-  const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [immersive, setImmersive] = useState(false);
 
   const isVideo = entry.type === "video";
+  const ready = objectUrl !== null;
 
   const exitImmersive = useCallback(() => {
     setImmersive(false);
@@ -37,155 +44,132 @@ export function MediaPlayer({
 
   useEffect(() => {
     let cancelled = false;
-
-    setReady(false);
-    setProgress(0);
-    setError(null);
-    setImmersive(false);
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current);
-      objectUrlRef.current = null;
-    }
-    setObjectUrl(null);
+    let url: string | null = null;
 
     (async () => {
       try {
-        const mime =
-          entry.mimeType ||
-          (isVideo ? "video/webm" : "audio/webm");
+        const mime = source.mimeType || (isVideo ? "video/webm" : "audio/webm");
         const parts: BlobPart[] = [];
         let done = 0;
-        const stream = openDecryptedMediaStream(masterKey, entry);
-        const reader = stream.getReader();
+        const reader = openDecryptedMediaStream(masterKey, source).getReader();
 
         while (true) {
           const { value, done: finished } = await reader.read();
           if (finished) break;
+          if (cancelled) {
+            void reader.cancel();
+            return;
+          }
           parts.push(value.slice().buffer);
           done += 1;
-          if (!cancelled) {
-            setProgress(
-              Math.round((done / Math.max(entry.chunkCount, 1)) * 100),
-            );
-          }
+          setProgress(Math.round((done / Math.max(source.chunkCount, 1)) * 100));
         }
 
-        const blob = new Blob(parts, { type: mime });
-        const url = URL.createObjectURL(blob);
-        if (cancelled) {
-          URL.revokeObjectURL(url);
-          return;
-        }
-        objectUrlRef.current = url;
+        if (cancelled) return;
+        url = URL.createObjectURL(new Blob(parts, { type: mime }));
         setObjectUrl(url);
-        setReady(true);
-      } catch (e) {
+      } catch {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Playback failed");
+          setError(
+            "This recording couldn’t be decrypted. Its stored data may be damaged or incomplete.",
+          );
         }
       }
     })();
 
     return () => {
       cancelled = true;
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-        objectUrlRef.current = null;
-      }
+      if (url) URL.revokeObjectURL(url);
     };
-  }, [entry, masterKey, isVideo]);
+  }, [source, masterKey, isVideo]);
 
-  useEffect(() => {
-    const el = audioRef.current;
-    if (!el || isVideo || !objectUrl) return;
-    el.src = objectUrl;
-  }, [objectUrl, isVideo]);
+  function download() {
+    if (!objectUrl) return;
+    const ext = extensionForMime(entry.mimeType, isVideo ? "webm" : "webm");
+    downloadUrl(objectUrl, `${safeFileName(entry.title, "entry")}.${ext}`);
+  }
+
+  const status = (
+    <>
+      {!ready && !error && (
+        <div className="decrypt-progress" role="status" aria-live="polite">
+          <p className="text-sm font-medium text-ink">
+            Unlocking {isVideo ? "video" : "recording"}… {progress}%
+          </p>
+          <div className="progress-track mt-2">
+            <div className="progress-fill" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+      )}
+      {error && (
+        <p role="alert" className="notice notice-danger">
+          {error}
+        </p>
+      )}
+    </>
+  );
+
+  const downloadButton = ready && (
+    <button type="button" className="btn-ghost mt-3 !px-2" onClick={download}>
+      <DownloadIcon />
+      Download an unencrypted copy
+    </button>
+  );
 
   if (!isVideo) {
     return (
       <div className="media-player">
-        {!ready && !error && (
-          <DecryptProgress progress={progress} chunkCount={entry.chunkCount} />
+        {status}
+        {ready && (
+          <audio
+            src={objectUrl}
+            className="media-el-audio w-full"
+            controls
+            preload="metadata"
+          />
         )}
-        {error && (
-          <p role="alert" className="text-danger">
-            {error}
-          </p>
-        )}
-        <audio
-          ref={audioRef}
-          className={`media-el-audio w-full ${ready ? "opacity-100" : "pointer-events-none absolute opacity-0"}`}
-          controls
-        />
+        {downloadButton}
       </div>
     );
   }
 
   return (
     <div className={immersive ? undefined : "media-player"}>
-      {!immersive && !ready && !error && (
-        <DecryptProgress progress={progress} chunkCount={entry.chunkCount} />
+      {!immersive && status}
+
+      {ready && (
+        <FullscreenVideo
+          active={immersive}
+          onExit={exitImmersive}
+          className="relative aspect-video overflow-hidden rounded-xl"
+          dock={
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={exitImmersive}
+            >
+              Exit fullscreen
+            </button>
+          }
+        >
+          <video
+            src={objectUrl}
+            className={`media-el ${immersive ? "video-fs-contain" : ""}`}
+            controls
+            playsInline
+          />
+          {!immersive && (
+            <button
+              type="button"
+              className="btn-secondary absolute right-3 top-3 z-10"
+              onClick={enterImmersive}
+            >
+              Fullscreen
+            </button>
+          )}
+        </FullscreenVideo>
       )}
-
-      {!immersive && error && (
-        <p role="alert" className="text-danger">
-          {error}
-        </p>
-      )}
-
-      <FullscreenVideo
-        active={immersive}
-        onExit={exitImmersive}
-        className="relative aspect-video overflow-hidden rounded-xl"
-        dock={
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={exitImmersive}
-          >
-            Exit fullscreen
-          </button>
-        }
-      >
-        <video
-          src={objectUrl ?? undefined}
-          className={`media-el ${ready ? "opacity-100" : "pointer-events-none absolute opacity-0"} ${immersive ? "video-fs-contain" : ""}`}
-          controls
-          playsInline
-        />
-        {!immersive && ready && (
-          <button
-            type="button"
-            className="btn-secondary absolute right-3 top-3 z-10"
-            onClick={enterImmersive}
-          >
-            Fullscreen
-          </button>
-        )}
-      </FullscreenVideo>
-    </div>
-  );
-}
-
-function DecryptProgress({
-  progress,
-  chunkCount,
-}: {
-  progress: number;
-  chunkCount: number;
-}) {
-  return (
-    <div className="decrypt-progress" aria-live="polite">
-      <p className="text-sm font-medium text-ink">
-        Decrypting stream… {progress}%
-      </p>
-      <div className="progress-track">
-        <div className="progress-fill" style={{ width: `${progress}%` }} />
-      </div>
-      <p className="mt-2 text-xs text-ink-muted">
-        Chunks unlocked on demand from device storage
-        {chunkCount > 1 ? ` (${chunkCount} chunks)` : ""}.
-      </p>
+      {!immersive && downloadButton}
     </div>
   );
 }

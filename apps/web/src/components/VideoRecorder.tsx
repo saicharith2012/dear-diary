@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { formatClock } from "@/lib/format";
 import { FullscreenVideo } from "./FullscreenVideo";
 
 function pickMime(candidates: string[]): string | undefined {
@@ -13,8 +14,11 @@ export function VideoRecorder({
   disabled,
   onCapture,
   onImmersiveChange,
+  onDirtyChange,
 }: {
   disabled?: boolean;
+  /** Fires true while recording or holding an unsaved take. */
+  onDirtyChange?: (dirty: boolean) => void;
   onCapture: (blob: Blob, durationMs: number) => void;
   onImmersiveChange?: (immersive: boolean) => void;
 }) {
@@ -55,6 +59,11 @@ export function VideoRecorder({
     void liveRef.current.play().catch(() => {});
   }, [previewing, previewUrl, immersive]);
 
+  const dirty = recording || blob !== null;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+
   function stopTracks() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
@@ -86,7 +95,9 @@ export function VideoRecorder({
         }
       });
     } catch {
-      setError("Camera and microphone permission are required.");
+      setError(
+        "Can’t reach the camera or microphone. Allow access for this site in your browser, then try again.",
+      );
     }
   }
 
@@ -160,7 +171,9 @@ export function VideoRecorder({
       )}
       {recording && (
         <button type="button" className="btn-danger" onClick={stop}>
-          Stop · {formatMs(elapsed)}
+          <span className="rec-dot" aria-hidden />
+          Stop recording
+          <span className="tabular-nums">{formatClock(elapsed)}</span>
         </button>
       )}
       {blob && !recording && (
@@ -171,7 +184,7 @@ export function VideoRecorder({
             disabled={disabled}
             onClick={() => onCapture(blob, elapsed)}
           >
-            Save
+            Save entry
           </button>
           <button
             type="button"
@@ -179,7 +192,7 @@ export function VideoRecorder({
             disabled={disabled}
             onClick={discard}
           >
-            Re-record
+            Record again
           </button>
         </>
       )}
@@ -190,10 +203,6 @@ export function VideoRecorder({
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-ink-muted">
-        Capture a short video diary entry.
-      </p>
-
       <FullscreenVideo
         active={immersive}
         onExit={exitImmersive}
@@ -224,14 +233,14 @@ export function VideoRecorder({
               playsInline
             />
             {!immersive && !previewing && (
-              <div className="absolute inset-0 flex items-center justify-center bg-ink/40">
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
                 <button
                   type="button"
                   className="btn-secondary"
                   onClick={enableCamera}
                   disabled={disabled}
                 >
-                  Enable camera
+                  Turn on camera
                 </button>
               </div>
             )}
@@ -281,11 +290,4 @@ export function VideoRecorder({
       )}
     </div>
   );
-}
-
-function formatMs(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  const r = s % 60;
-  return `${m}:${r.toString().padStart(2, "0")}`;
 }

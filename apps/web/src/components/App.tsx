@@ -3,6 +3,7 @@
 import { AuthProvider, useAuth } from "@dear-diary/core";
 import { AuthScreen } from "@/components/AuthScreen";
 import { DiaryApp } from "@/components/DiaryApp";
+import { FeedbackProvider } from "@/components/Feedback";
 import { installWebAdapters } from "@/lib/adapters";
 
 // Runs at module evaluation, before AuthProvider mounts and reads the vault.
@@ -17,7 +18,9 @@ function Gate() {
 export function App() {
   return (
     <AuthProvider>
-      <Gate />
+      <FeedbackProvider>
+        <Gate />
+      </FeedbackProvider>
     </AuthProvider>
   );
 }

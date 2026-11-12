@@ -1,5 +1,10 @@
 export type EntryType = "text" | "audio" | "video";
 
+/** How the day felt, from best to worst. Optional on every entry. */
+export type Mood = "great" | "good" | "okay" | "low" | "rough";
+
+export const MOODS: readonly Mood[] = ["great", "good", "okay", "low", "rough"];
+
 export interface JournalEntryMeta {
   id: string;
   type: EntryType;
@@ -11,6 +16,9 @@ export interface JournalEntryMeta {
   chunkCount: number;
   mimeType?: string;
   durationMs?: number;
+  /** Starred by the user. Absent on entries saved before starring existed. */
+  favorite?: boolean;
+  mood?: Mood;
 }
 
 export interface VaultProfile {

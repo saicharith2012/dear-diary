@@ -37,6 +37,7 @@ export {
   registerVault,
   resetVault,
   unlockWithPasscode,
+  updateDisplayName,
   validatePasscode,
 } from "./vault";
 export {
@@ -46,5 +47,7 @@ export {
   openDecryptedMediaStream,
   readTextEntry,
   removeEntry,
+  updateEntryDetails,
+  updateTextEntry,
 } from "./journal";
 export { AuthProvider, useAuth } from "./auth-context";

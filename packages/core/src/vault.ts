@@ -149,6 +149,19 @@ export async function changePasscode(
   return nextProfile;
 }
 
+/** Rename the vault owner. Touches nothing cryptographic. */
+export async function updateDisplayName(
+  displayName: string,
+): Promise<VaultProfile> {
+  const name = displayName.trim();
+  if (!name) throw new Error("Enter a name.");
+  const profile = await getProfile();
+  if (!profile) throw new Error("No diary vault found.");
+  const next: VaultProfile = { ...profile, displayName: name.slice(0, 64) };
+  await saveProfile(next);
+  return next;
+}
+
 export async function resetVault(): Promise<void> {
   await wipeAllData();
 }

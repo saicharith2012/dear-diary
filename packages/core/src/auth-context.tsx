@@ -15,6 +15,7 @@ import {
   registerVault,
   resetVault,
   unlockWithPasscode,
+  updateDisplayName as updateDisplayNameVault,
   type CryptoSupportInfo,
 } from "./vault";
 import { getProfile } from "./storage";
@@ -32,6 +33,12 @@ interface AuthContextValue {
     currentPasscode: string,
     newPasscode: string,
   ) => Promise<void>;
+  updateDisplayName: (displayName: string) => Promise<void>;
+  /**
+   * Re-read the vault from storage and lock. Call after something outside the
+   * provider replaced it (restoring a backup).
+   */
+  reloadVault: () => Promise<void>;
   lock: () => void;
   reset: () => Promise<void>;
   clearError: () => void;
@@ -118,6 +125,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const updateDisplayName = useCallback(async (displayName: string) => {
+    setProfile(await updateDisplayNameVault(displayName));
+  }, []);
+
+  const reloadVault = useCallback(async () => {
+    const existing = await getProfile();
+    setError(null);
+    setMasterKey(null);
+    setProfile(existing);
+    setStatus(existing ? "locked" : "unregistered");
+  }, []);
+
   const lock = useCallback(() => {
     setMasterKey(null);
     setStatus("locked");
@@ -143,6 +162,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register,
       unlock,
       changePasscode,
+      updateDisplayName,
+      reloadVault,
       lock,
       reset,
       clearError,
@@ -156,6 +177,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register,
       unlock,
       changePasscode,
+      updateDisplayName,
+      reloadVault,
       lock,
       reset,
       clearError,

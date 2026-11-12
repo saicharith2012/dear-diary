@@ -10,6 +10,12 @@ A private **text / audio / video** journal built with Next.js. Everything stays 
 - **64 KiB encrypted chunks** in IndexedDB for media and notes
 - **Streaming decrypt** on replay (pull-based chunk decryption → Blob URL)
 - Text notes, voice notes, and video diary entries
+- **Edit** written notes; rename, star, and set a mood on any entry
+- **Search** across titles and the text of written notes, with filters by type and starred
+- **Encrypted backup file** — download from Settings, restore from the start screen of a new browser
+- **Auto-lock** after inactivity (default 15 minutes, configurable)
+- Light / dark theme, phone-sized layout, keyboard shortcuts (`N` new entry, `/` search)
+- Download an unencrypted copy of a single entry
 
 ## Repo layout
 
@@ -61,4 +67,8 @@ npm run verify:crypto   # prove the shared core is byte-compatible with the
 - Entries never leave the browser origin.
 - Use Lock when stepping away; the master key is held only in memory while unlocked.
 - A weak passcode can be brute-forced offline by anyone with your IndexedDB data—prefer a long passphrase.
+- Entry **content** is encrypted. Entry **details** — title, date, type, mood, star, size — are stored unencrypted so the list can render without decrypting everything; don't put secrets in a title.
+- While unlocked, written notes are decrypted into memory for search and list previews; locking discards them.
+- A backup file is the vault exactly as stored (still encrypted) and opens with the passcode in use when it was made.
+- Theme and auto-lock preferences live in `localStorage`, outside the vault.
 - Change passcode (while unlocked) re-wraps the same vault key; entries are not re-encrypted.

@@ -63,9 +63,11 @@ export function FullscreenVideo({
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const onExitRef = useRef(onExit);
-  onExitRef.current = onExit;
   const activeRef = useRef(active);
-  activeRef.current = active;
+  useLayoutEffect(() => {
+    onExitRef.current = onExit;
+    activeRef.current = active;
+  }, [onExit, active]);
 
   // Request browser fullscreen while still inside the user-gesture turn
   // (parents should set `active` via flushSync on click).

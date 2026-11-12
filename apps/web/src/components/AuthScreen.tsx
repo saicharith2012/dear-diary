@@ -1,7 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { MIN_PASSCODE_LENGTH, useAuth } from "@dear-diary/core";
+import { useRef, useState } from "react";
+import { useAuth } from "@dear-diary/core";
+import { restoreBackup } from "@/lib/backup";
+import { plural } from "@/lib/format";
+import { useFeedback } from "./Feedback";
+import { LockIcon } from "./Icons";
+import { PasscodeField } from "./PasscodeField";
 
 export function AuthScreen() {
   const {
@@ -12,29 +17,31 @@ export function AuthScreen() {
     register,
     unlock,
     reset,
+    reloadVault,
     clearError,
   } = useAuth();
+  const { toast } = useFeedback();
   const [name, setName] = useState("");
   const [passcode, setPasscode] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [resetPhrase, setResetPhrase] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
+  const [restoreProgress, setRestoreProgress] = useState<number | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
     clearError();
     setLocalError(null);
     if (passcode !== confirm) {
-      setLocalError("Passcodes do not match.");
-      setBusy(false);
+      setLocalError("The two passcodes don’t match.");
       return;
     }
+    setBusy(true);
     try {
       await register(name, passcode);
-      setPasscode("");
-      setConfirm("");
     } catch {
       /* surfaced via context */
     } finally {
@@ -49,9 +56,8 @@ export function AuthScreen() {
     setLocalError(null);
     try {
       await unlock(passcode);
-      setPasscode("");
     } catch {
-      /* surfaced via context */
+      setPasscode("");
     } finally {
       setBusy(false);
     }
@@ -62,11 +68,37 @@ export function AuthScreen() {
     try {
       await reset();
       setConfirmReset(false);
+      setResetPhrase("");
       setPasscode("");
       setConfirm("");
       setName("");
+      toast("Vault deleted from this device");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleRestore(file: File) {
+    clearError();
+    setLocalError(null);
+    setBusy(true);
+    setRestoreProgress(0);
+    try {
+      const summary = await restoreBackup(file, (ratio) =>
+        setRestoreProgress(Math.round(ratio * 100)),
+      );
+      await reloadVault();
+      toast(
+        `Restored ${plural(summary.entryCount, "entry", "entries")}. Unlock with that backup’s passcode.`,
+      );
+    } catch (err) {
+      setLocalError(
+        err instanceof Error ? err.message : "Could not restore that backup.",
+      );
+    } finally {
+      setBusy(false);
+      setRestoreProgress(null);
+      if (fileRef.current) fileRef.current.value = "";
     }
   }
 
@@ -74,8 +106,8 @@ export function AuthScreen() {
 
   if (status === "loading") {
     return (
-      <div className="auth-shell">
-        <p className="text-ink-muted text-base">Opening your diary…</p>
+      <div className="auth-shell" role="status">
+        <p className="text-base text-ink-muted">Opening your diary…</p>
       </div>
     );
   }
@@ -85,140 +117,171 @@ export function AuthScreen() {
     const localhostUrl = cryptoSupport?.localhostUrl;
     return (
       <div className="auth-shell">
-        <BrandMark />
-        {insecure ? (
-          <div className="mt-8 max-w-md text-center text-lg text-ink-muted">
-            <p>
-              This page is open over an insecure connection (
-              <span className="text-ink">{typeof window !== "undefined"
-                ? window.location.host
-                : "this host"}
-              </span>
-              ), so the browser hides the Web Crypto API used to lock your
-              diary.
+        <div className="auth-panel">
+          <BrandMark />
+          {insecure ? (
+            <div className="mt-8 max-w-md text-center text-base leading-relaxed text-ink-muted">
+              <p>
+                This page is open over an insecure connection (
+                <span className="text-ink">
+                  {typeof window !== "undefined"
+                    ? window.location.host
+                    : "this host"}
+                </span>
+                ), so the browser hides the encryption features that lock your
+                diary.
+              </p>
+              <p className="mt-4">
+                Open it via{" "}
+                <span className="font-medium text-ink">localhost</span> or HTTPS
+                instead
+                {localhostUrl ? (
+                  <>
+                    :{" "}
+                    <a
+                      className="font-medium text-accent-text underline"
+                      href={localhostUrl}
+                    >
+                      {localhostUrl}
+                    </a>
+                  </>
+                ) : (
+                  "."
+                )}
+              </p>
+            </div>
+          ) : (
+            <p className="mt-8 max-w-md text-center text-base leading-relaxed text-ink-muted">
+              This browser can’t encrypt your diary. Use a current version of
+              Chrome, Safari, Edge, or Firefox over HTTPS (or localhost).
             </p>
-            <p className="mt-4">
-              Open it via{" "}
-              <span className="font-medium text-ink">localhost</span> or HTTPS
-              instead
-              {localhostUrl ? (
-                <>
-                  :{" "}
-                  <a className="text-accent underline" href={localhostUrl}>
-                    {localhostUrl}
-                  </a>
-                </>
-              ) : (
-                "."
-              )}
-            </p>
-          </div>
-        ) : (
-          <p className="mt-8 max-w-md text-center text-lg text-ink-muted">
-            This browser does not support the Web Crypto API needed to lock your
-            diary. Try a current version of Chrome, Safari, Edge, or Firefox over
-            HTTPS (or localhost).
-          </p>
-        )}
+          )}
+        </div>
       </div>
     );
   }
 
   return (
     <div className="auth-shell">
-      <div className="auth-panel motion-safe:animate-rise">
+      <main className="auth-panel motion-safe:animate-rise">
         <BrandMark />
-        <p className="mt-4 max-w-sm text-center text-base leading-relaxed text-ink-muted">
-          A private journal that stays on this device—encrypted, unlockable only
-          with your passcode.
-        </p>
 
         {status === "unregistered" && (
-          <form
-            onSubmit={handleRegister}
-            className="mt-10 flex w-full flex-col gap-4"
-          >
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-ink">Your name</span>
-              <input
-                className="field"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="How should we greet you?"
-                autoComplete="name"
-                required
-                minLength={1}
-                maxLength={64}
-              />
-            </label>
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-ink">Passcode</span>
-              <input
-                className="field"
-                type="password"
-                value={passcode}
-                onChange={(e) => setPasscode(e.target.value)}
-                placeholder={`At least ${MIN_PASSCODE_LENGTH} characters`}
-                autoComplete="new-password"
-                required
-                minLength={MIN_PASSCODE_LENGTH}
-                maxLength={128}
-              />
-            </label>
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-ink">
-                Confirm passcode
-              </span>
-              <input
-                className="field"
-                type="password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                placeholder="Enter the same passcode"
-                autoComplete="new-password"
-                required
-                minLength={MIN_PASSCODE_LENGTH}
-                maxLength={128}
-              />
-            </label>
-            <button type="submit" className="btn-primary" disabled={busy}>
-              {busy ? "Creating vault…" : "Create vault & open diary"}
-            </button>
-            <p className="text-center text-sm text-ink-muted">
-              Your passcode never leaves this device. Only a salt and wrapped
-              vault key are stored locally—no account, no cloud.
+          <>
+            <p className="mt-4 max-w-sm text-center text-base leading-relaxed text-ink-muted">
+              A private journal for words, voice, and video. It stays on this
+              device, encrypted, and opens only with your passcode.
             </p>
-          </form>
+            <form
+              onSubmit={handleRegister}
+              className="mt-8 flex w-full flex-col gap-4"
+            >
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-ink">Your name</span>
+                <input
+                  className="field"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="What should the diary call you?"
+                  autoComplete="name"
+                  required
+                  maxLength={64}
+                  disabled={busy}
+                />
+              </label>
+              <PasscodeField
+                label="Passcode"
+                value={passcode}
+                onChange={setPasscode}
+                autoComplete="new-password"
+                placeholder="A long phrase is safest"
+                showStrength
+                disabled={busy}
+              />
+              <PasscodeField
+                label="Confirm passcode"
+                value={confirm}
+                onChange={setConfirm}
+                autoComplete="new-password"
+                disabled={busy}
+              />
+              <p className="notice notice-ok">
+                There is no “forgot passcode”. If you lose it, the entries can’t
+                be recovered by anyone.
+              </p>
+              <button type="submit" className="btn-primary" disabled={busy}>
+                {busy && restoreProgress === null
+                  ? "Creating your diary…"
+                  : "Create diary"}
+              </button>
+            </form>
+
+            <div className="mt-6 w-full border-t border-line pt-5 text-center">
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".ddbackup,application/octet-stream"
+                className="sr-only"
+                tabIndex={-1}
+                aria-hidden
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handleRestore(file);
+                }}
+              />
+              {restoreProgress === null ? (
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={busy}
+                >
+                  Restore from a backup file
+                </button>
+              ) : (
+                <div role="status" aria-live="polite">
+                  <p className="text-sm font-medium text-ink">
+                    Restoring backup… {restoreProgress}%
+                  </p>
+                  <div className="progress-track mt-2">
+                    <div
+                      className="progress-fill"
+                      style={{ width: `${restoreProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {status === "locked" && profile && (
           <form
             onSubmit={handleUnlock}
-            className="mt-10 flex w-full flex-col gap-4"
+            className="mt-8 flex w-full flex-col gap-4"
           >
-            <p className="text-center text-lg text-ink">
-              Welcome back,{" "}
-              <span className="font-display font-semibold">
-                {profile.displayName}
+            <p className="flex items-center justify-center gap-2 text-center text-lg text-ink">
+              <LockIcon className="text-ink-muted" />
+              <span>
+                Welcome back,{" "}
+                <span className="font-display font-semibold">
+                  {profile.displayName}
+                </span>
               </span>
             </p>
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-ink">Passcode</span>
-              <input
-                className="field"
-                type="password"
-                value={passcode}
-                onChange={(e) => setPasscode(e.target.value)}
-                placeholder="Enter your passcode"
-                autoComplete="current-password"
-                required
-                minLength={MIN_PASSCODE_LENGTH}
-                maxLength={128}
-                autoFocus
-              />
-            </label>
+            <PasscodeField
+              label="Passcode"
+              value={passcode}
+              onChange={(v) => {
+                setPasscode(v);
+                if (error) clearError();
+              }}
+              autoComplete="current-password"
+              autoFocus
+              disabled={busy}
+            />
             <button type="submit" className="btn-primary" disabled={busy}>
-              {busy ? "Unlocking…" : "Unlock diary"}
+              {busy && !confirmReset ? "Unlocking…" : "Unlock diary"}
             </button>
             {!confirmReset ? (
               <button
@@ -227,26 +290,45 @@ export function AuthScreen() {
                 onClick={() => setConfirmReset(true)}
                 disabled={busy}
               >
-                Reset this device vault
+                Forgot passcode?
               </button>
             ) : (
-              <div className="rounded-lg bg-danger-soft p-4 text-sm text-danger">
-                <p className="font-medium">
-                  This permanently deletes all encrypted entries on this device.
+              <div className="notice notice-danger">
+                <p className="font-semibold">
+                  A forgotten passcode can’t be recovered.
                 </p>
-                <div className="mt-4 flex gap-2">
+                <p className="mt-1">
+                  The only way forward is to delete this device’s vault and
+                  every entry in it, then start a new diary. Type{" "}
+                  <span className="font-semibold">delete</span> to confirm.
+                </p>
+                <input
+                  className="field mt-3"
+                  value={resetPhrase}
+                  onChange={(e) => setResetPhrase(e.target.value)}
+                  aria-label="Type delete to confirm"
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                />
+                <div className="mt-3 flex gap-2">
                   <button
                     type="button"
                     className="btn-danger flex-1"
                     onClick={handleReset}
-                    disabled={busy}
+                    disabled={
+                      busy || resetPhrase.trim().toLowerCase() !== "delete"
+                    }
                   >
                     Delete everything
                   </button>
                   <button
                     type="button"
                     className="btn-ghost flex-1"
-                    onClick={() => setConfirmReset(false)}
+                    onClick={() => {
+                      setConfirmReset(false);
+                      setResetPhrase("");
+                    }}
                     disabled={busy}
                   >
                     Cancel
@@ -258,14 +340,11 @@ export function AuthScreen() {
         )}
 
         {shownError && (
-          <p
-            role="alert"
-            className="mt-6 w-full rounded-lg bg-danger-soft px-4 py-3 text-sm text-danger"
-          >
+          <p role="alert" className="notice notice-danger mt-6 w-full">
             {shownError}
           </p>
         )}
-      </div>
+      </main>
     </div>
   );
 }
@@ -273,9 +352,9 @@ export function AuthScreen() {
 function BrandMark() {
   return (
     <div className="flex flex-col items-center gap-2">
-      <p className="font-display text-5xl font-semibold tracking-tight text-ink md:text-6xl">
+      <h1 className="font-display text-5xl font-semibold tracking-tight text-ink md:text-6xl">
         Dear Diary
-      </p>
+      </h1>
       <span className="h-1 w-16 rounded-full bg-accent" aria-hidden />
     </div>
   );

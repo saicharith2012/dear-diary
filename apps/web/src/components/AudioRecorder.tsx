@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { formatClock } from "@/lib/format";
+import { MicIcon } from "./Icons";
 
 function pickMime(candidates: string[]): string | undefined {
   if (typeof MediaRecorder === "undefined") return undefined;
@@ -10,8 +12,11 @@ function pickMime(candidates: string[]): string | undefined {
 export function AudioRecorder({
   disabled,
   onCapture,
+  onDirtyChange,
 }: {
   disabled?: boolean;
+  /** Fires true while recording or holding an unsaved take. */
+  onDirtyChange?: (dirty: boolean) => void;
   onCapture: (blob: Blob, durationMs: number) => void;
 }) {
   const [recording, setRecording] = useState(false);
@@ -34,6 +39,11 @@ export function AudioRecorder({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const dirty = recording || blob !== null;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
 
   function stopTracks() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -76,7 +86,9 @@ export function AudioRecorder({
       recorder.start(250);
       setRecording(true);
     } catch {
-      setError("Microphone permission is required to record audio.");
+      setError(
+        "Can’t reach the microphone. Allow microphone access for this site in your browser, then try again.",
+      );
     }
   }
 
@@ -98,11 +110,7 @@ export function AudioRecorder({
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-ink-muted">
-        Record a voice note.
-      </p>
-
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-3">
         {!recording && !blob && (
           <button
             type="button"
@@ -110,12 +118,15 @@ export function AudioRecorder({
             onClick={start}
             disabled={disabled}
           >
+            <MicIcon />
             Start recording
           </button>
         )}
         {recording && (
           <button type="button" className="btn-danger" onClick={stop}>
-            Stop · {formatMs(elapsed)}
+            <span className="rec-dot" aria-hidden />
+            Stop recording
+            <span className="tabular-nums">{formatClock(elapsed)}</span>
           </button>
         )}
         {blob && !recording && (
@@ -126,7 +137,7 @@ export function AudioRecorder({
               disabled={disabled}
               onClick={() => onCapture(blob, elapsed)}
             >
-              Save
+              Save entry
             </button>
             <button
               type="button"
@@ -134,7 +145,7 @@ export function AudioRecorder({
               disabled={disabled}
               onClick={discard}
             >
-              Re-record
+              Record again
             </button>
           </>
         )}
@@ -151,11 +162,4 @@ export function AudioRecorder({
       )}
     </div>
   );
-}
-
-function formatMs(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  const r = s % 60;
-  return `${m}:${r.toString().padStart(2, "0")}`;
 }
